@@ -1,0 +1,42 @@
+{
+  "invoices": [
+    {
+      "invoice_number": "INV-3307",
+      "invoice_date": "2026-08-02",
+      "due_date": "2026-09-01",
+      "supplier_name": "Brightline Studio SAS",
+      "supplier_address": "8 Rue Imaginaire, 69002 Lyon, France",
+      "supplier_tax_id": "FR12345678901",
+      "client_name": "Northwind Demo Ltd",
+      "client_address": "77 Example Street, Dublin, Ireland",
+      "client_tax_id": "IE9999999X",
+      "line_items": [
+        {
+          "description": "Logo design",
+          "quantity": 1,
+          "unit_price": 900.0,
+          "total": 900.0
+        },
+        {
+          "description": "Brand guidelines (PDF)",
+          "quantity": 1,
+          "unit_price": 450.0,
+          "total": 450.0
+        },
+        {
+          "description": "Revision hours",
+          "quantity": 6,
+          "unit_price": 55.0,
+          "total": 330.0
+        }
+      ],
+      "subtotal": 1680.0,
+      "vat_rate": 20,
+      "vat_amount": 336.0,
+      "total_amount": 2016.0,
+      "currency": "EUR",
+      "payment_method": "Bank transfer",
+      "notes": null
+    }
+  ]
+}

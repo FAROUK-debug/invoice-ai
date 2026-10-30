@@ -1,0 +1,42 @@
+{
+  "invoices": [
+    {
+      "invoice_number": "FA-2026-0142",
+      "invoice_date": "2026-09-15",
+      "due_date": "2026-10-15",
+      "supplier_name": "Atlas Informatique SARL",
+      "supplier_address": "12 Rue des Oliviers, 1002 Tunis",
+      "supplier_tax_id": "1234567/A/M/000",
+      "client_name": "Société Jasmin Services",
+      "client_address": "3 Rue du Lac Léman, 1053 Les Berges du Lac",
+      "client_tax_id": "9876543/C/M/000",
+      "line_items": [
+        {
+          "description": "Ordinateur portable 15 pouces",
+          "quantity": 2,
+          "unit_price": 1850.0,
+          "total": 3700.0
+        },
+        {
+          "description": "Souris sans fil",
+          "quantity": 2,
+          "unit_price": 35.5,
+          "total": 71.0
+        },
+        {
+          "description": "Installation et configuration",
+          "quantity": 1,
+          "unit_price": 120.0,
+          "total": 120.0
+        }
+      ],
+      "subtotal": 3891.0,
+      "vat_rate": 19,
+      "vat_amount": 739.29,
+      "total_amount": 4631.29,
+      "currency": "TND",
+      "payment_method": "Virement bancaire",
+      "notes": null
+    }
+  ]
+}
