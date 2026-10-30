@@ -1,0 +1,36 @@
+{
+  "invoices": [
+    {
+      "invoice_number": "INV-3311",
+      "invoice_date": "2026-09-28",
+      "due_date": "2026-10-28",
+      "supplier_name": "Brightline Studio SAS",
+      "supplier_address": "8 Rue Imaginaire, 69002 Lyon, France",
+      "supplier_tax_id": "FR12345678901",
+      "client_name": "Northwind Demo Ltd",
+      "client_address": "77 Example Street, Dublin, Ireland",
+      "client_tax_id": "IE9999999X",
+      "line_items": [
+        {
+          "description": "Website maintenance",
+          "quantity": 1,
+          "unit_price": 300.0,
+          "total": 300.0
+        },
+        {
+          "description": "Hosting (12 months)",
+          "quantity": 1,
+          "unit_price": 240.0,
+          "total": 240.0
+        }
+      ],
+      "subtotal": 540.0,
+      "vat_rate": 20,
+      "vat_amount": 108.0,
+      "total_amount": 658.0,
+      "currency": "EUR",
+      "payment_method": "Card",
+      "notes": null
+    }
+  ]
+}

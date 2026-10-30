@@ -1,0 +1,36 @@
+{
+  "invoices": [
+    {
+      "invoice_number": "FA-2026-0177",
+      "invoice_date": "2026-07-20",
+      "due_date": null,
+      "supplier_name": "Atlas Informatique SARL",
+      "supplier_address": "12 Rue des Oliviers, 1002 Tunis",
+      "supplier_tax_id": "1234567/A/M/000",
+      "client_name": "Société Jasmin Services",
+      "client_address": "3 Rue du Lac Léman, 1053 Les Berges du Lac",
+      "client_tax_id": "9876543/C/M/000",
+      "line_items": [
+        {
+          "description": "Maintenance serveur (mensuel)",
+          "quantity": 3,
+          "unit_price": 400.0,
+          "total": 1200.0
+        },
+        {
+          "description": "Licence antivirus",
+          "quantity": 10,
+          "unit_price": 48.0,
+          "total": 480.0
+        }
+      ],
+      "subtotal": 1680.0,
+      "vat_rate": 19,
+      "vat_amount": 319.2,
+      "total_amount": 2000.2,
+      "currency": "TND",
+      "payment_method": "Virement bancaire",
+      "notes": null
+    }
+  ]
+}

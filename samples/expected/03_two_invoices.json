@@ -1,0 +1,62 @@
+{
+  "invoices": [
+    {
+      "invoice_number": "FA-2026-0201",
+      "invoice_date": "2026-10-01",
+      "due_date": "2026-10-31",
+      "supplier_name": "Medina Fournitures",
+      "supplier_address": "45 Avenue de Carthage, 2000 Le Bardo",
+      "supplier_tax_id": "7654321/B/P/000",
+      "client_name": "Société Jasmin Services",
+      "client_address": "3 Rue du Lac Léman, 1053 Les Berges du Lac",
+      "client_tax_id": "9876543/C/M/000",
+      "line_items": [
+        {
+          "description": "Ramette papier A4",
+          "quantity": 40,
+          "unit_price": 12.8,
+          "total": 512.0
+        },
+        {
+          "description": "Stylos bleus (boîte de 50)",
+          "quantity": 3,
+          "unit_price": 22.0,
+          "total": 66.0
+        }
+      ],
+      "subtotal": 578.0,
+      "vat_rate": 19,
+      "vat_amount": 109.82,
+      "total_amount": 688.82,
+      "currency": "TND",
+      "payment_method": "Chèque",
+      "notes": null
+    },
+    {
+      "invoice_number": "FA-2026-0202",
+      "invoice_date": "2026-10-03",
+      "due_date": "2026-11-02",
+      "supplier_name": "Medina Fournitures",
+      "supplier_address": "45 Avenue de Carthage, 2000 Le Bardo",
+      "supplier_tax_id": "7654321/B/P/000",
+      "client_name": "Société Jasmin Services",
+      "client_address": "3 Rue du Lac Léman, 1053 Les Berges du Lac",
+      "client_tax_id": "9876543/C/M/000",
+      "line_items": [
+        {
+          "description": "Classeurs à levier",
+          "quantity": 25,
+          "unit_price": 6.75,
+          "total": 168.75
+        }
+      ],
+      "subtotal": 168.75,
+      "vat_rate": 19,
+      "vat_amount": 32.062,
+      "total_amount": 201.812,
+      "currency": "TND",
+      "payment_method": "Espèces",
+      "notes": null
+    }
+  ]
+}
