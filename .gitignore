@@ -1,0 +1,12 @@
+# secrets
+.env
+# local data: results can contain real business data
+results/
+uploads/
+private/
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/

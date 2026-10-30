@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>InvoiceAI — Intelligent Invoice Parser</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&family=Manrope:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<style>
+:root{--bg:#0b0c10;--surface:#13151c;--border:#1e2130;--accent:#4af2a1;--accent2:#2dd4bf;--warn:#f59e0b;--error:#f87171;--text:#e8eaf0;--muted:#6b7280;--radius:12px;--mono:'JetBrains Mono',monospace;--sans:'Manrope',sans-serif;--display:'Syne',sans-serif}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;display:flex;flex-direction:column}
+header{display:flex;align-items:center;justify-content:space-between;padding:20px 40px;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;background:rgba(11,12,16,0.9)}
+.logo{font-family:var(--display);font-weight:800;font-size:1.4rem;letter-spacing:-0.03em}.logo span{color:var(--accent)}
+.badge{font-size:0.7rem;font-family:var(--mono);background:rgba(74,242,161,0.1);color:var(--accent);border:1px solid rgba(74,242,161,0.25);padding:3px 10px;border-radius:99px;letter-spacing:0.08em}
+main{flex:1;display:grid;grid-template-columns:400px 1fr;height:calc(100vh - 65px)}
+/* LEFT */
+.left-panel{border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto}
+.upload-zone{margin:28px 24px 0;border:2px dashed var(--border);border-radius:var(--radius);padding:32px 20px;text-align:center;cursor:pointer;transition:all 0.2s}
+.upload-zone:hover,.upload-zone.drag-over{border-color:var(--accent);background:rgba(74,242,161,0.03)}
+.upload-icon{width:52px;height:52px;margin:0 auto 14px;background:var(--surface);border:1px solid var(--border);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.4rem;pointer-events:none;transition:transform 0.2s}
+.upload-zone:hover .upload-icon{transform:translateY(-3px)}
+.upload-title{font-family:var(--display);font-weight:700;font-size:0.95rem;margin-bottom:5px;pointer-events:none}
+.upload-sub{font-size:0.75rem;color:var(--muted);line-height:1.5;pointer-events:none}.upload-sub strong{color:var(--accent)}
+.btn-primary{display:inline-flex;align-items:center;gap:8px;margin-top:16px;background:var(--accent);color:#0b0c10;font-family:var(--sans);font-weight:700;font-size:0.8rem;padding:9px 20px;border:none;border-radius:8px;cursor:pointer;transition:all 0.2s;position:relative;z-index:5}
+.btn-primary:hover{background:#6ffdb4;transform:translateY(-1px)}
+.file-preview{margin:12px 24px 0;padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);display:none;align-items:center;gap:10px}
+.file-preview.visible{display:flex}
+.file-icon{font-size:1.4rem;flex-shrink:0}.file-info{flex:1;min-width:0}
+.file-name{font-size:0.8rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.file-size{font-size:0.7rem;color:var(--muted);margin-top:2px}
+.file-remove{background:none;border:none;color:var(--muted);cursor:pointer;font-size:0.95rem;padding:4px;border-radius:4px;transition:color 0.15s}
+.file-remove:hover{color:var(--error)}
+.process-wrap{margin:16px 24px}
+.btn-process{width:100%;padding:12px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#0b0c10;font-family:var(--display);font-weight:700;font-size:0.88rem;border:none;border-radius:var(--radius);cursor:pointer;transition:all 0.25s;display:flex;align-items:center;justify-content:center;gap:8px;opacity:0.4;pointer-events:none}
+.btn-process.ready{opacity:1;pointer-events:all}
+.btn-process.ready:hover{transform:translateY(-2px);box-shadow:0 6px 28px rgba(74,242,161,0.3)}
+.btn-process.loading{opacity:0.75;pointer-events:none}
+.spinner{width:15px;height:15px;border:2px solid rgba(11,12,16,0.3);border-top-color:#0b0c10;border-radius:50%;animation:spin 0.7s linear infinite;display:none}
+.btn-process.loading .spinner{display:block}
+@keyframes spin{to{transform:rotate(360deg)}}
+.section-sep{font-size:0.66rem;font-family:var(--mono);color:var(--muted);letter-spacing:0.12em;text-transform:uppercase;padding:20px 24px 8px}
+.btn-ghost{display:inline-flex;align-items:center;gap:6px;background:var(--surface);color:var(--text);font-family:var(--sans);font-weight:500;font-size:0.78rem;padding:8px 14px;border:1px solid var(--border);border-radius:8px;cursor:pointer;transition:all 0.2s}
+.btn-ghost:hover{border-color:var(--accent);color:var(--accent)}
+/* Batch list */
+.batch-list{padding:0 24px;display:flex;flex-direction:column;gap:6px;margin-top:10px}
+.batch-item{display:flex;align-items:center;gap:8px;padding:9px 11px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:0.76rem}
+.b-name{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bst{font-size:0.68rem;font-family:var(--mono);padding:2px 8px;border-radius:99px;flex-shrink:0}
+.bst.pending{background:rgba(107,114,128,0.2);color:var(--muted)}
+.bst.done{background:rgba(74,242,161,0.1);color:var(--accent)}
+.bst.error{background:rgba(248,113,113,0.1);color:var(--error)}
+.bst.processing{background:rgba(245,158,11,0.1);color:var(--warn);animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
+/* RIGHT */
+.right-panel{display:flex;flex-direction:column;overflow:hidden}
+.panel-header{display:flex;align-items:center;justify-content:space-between;padding:18px 28px;border-bottom:1px solid var(--border);flex-shrink:0}
+.panel-title{font-family:var(--display);font-weight:700;font-size:1rem}
+.panel-actions{display:flex;gap:8px}
+.empty-state{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--muted);gap:14px;padding:40px}
+.empty-graphic{width:90px;height:90px;border:2px dashed var(--border);border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:2.2rem;opacity:0.35}
+.empty-text{text-align:center}.empty-text h3{font-family:var(--display);font-size:1rem;color:var(--text);margin-bottom:5px}.empty-text p{font-size:0.8rem}
+/* Results area */
+.results-area{flex:1;overflow-y:auto;display:none;flex-direction:column}
+.results-area.visible{display:flex}
+/* PDF tabs (level 1) */
+.pdf-tabs-bar{padding:16px 28px 0;border-bottom:1px solid var(--border);display:flex;flex-wrap:wrap;gap:8px;flex-shrink:0}
+.pdf-tab{background:var(--surface);border:1px solid var(--border);color:var(--muted);font-family:var(--mono);font-size:0.7rem;padding:6px 14px;border-radius:8px 8px 0 0;cursor:pointer;transition:all 0.15s;display:flex;align-items:center;gap:6px;border-bottom:none;position:relative;bottom:-1px}
+.pdf-tab:hover{color:var(--text);border-color:var(--accent)}
+.pdf-tab.active{background:var(--bg);border-color:var(--accent);color:var(--accent);border-bottom-color:var(--bg)}
+.pdf-count{font-size:0.62rem;background:rgba(74,242,161,0.15);color:var(--accent);padding:1px 6px;border-radius:99px}
+/* Invoice tabs (level 2) */
+.invoice-tabs-bar{padding:14px 28px;display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--border);flex-shrink:0;background:rgba(19,21,28,0.6)}
+.inv-tab{background:transparent;border:1px solid var(--border);color:var(--muted);font-family:var(--mono);font-size:0.68rem;padding:5px 12px;border-radius:99px;cursor:pointer;transition:all 0.15s}
+.inv-tab:hover{border-color:var(--accent);color:var(--accent)}
+.inv-tab.active{background:rgba(74,242,161,0.1);border-color:var(--accent);color:var(--accent)}
+/* Invoice content */
+.invoice-content{padding:22px 28px;flex:1;overflow-y:auto}
+.summary-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;margin-bottom:24px}
+.summary-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;position:relative;overflow:hidden;animation:fadeUp 0.35s ease both}
+.summary-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--accent),var(--accent2))}
+.card-label{font-size:0.65rem;font-family:var(--mono);color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:7px}
+.card-value{font-size:0.9rem;font-weight:600;word-break:break-word}
+.card-value.amount{font-family:var(--mono);color:var(--accent);font-size:1rem}
+.null-value{color:var(--muted);font-style:italic;font-size:0.78rem}
+@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.sec-title{font-family:var(--display);font-weight:700;font-size:0.88rem;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.sec-title::after{content:'';flex:1;height:1px;background:var(--border)}
+.table-wrap{overflow-x:auto;margin-bottom:24px}
+table{width:100%;border-collapse:collapse;font-size:0.78rem}
+thead tr{border-bottom:1px solid var(--border)}
+th{text-align:left;font-family:var(--mono);font-size:0.65rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;padding:0 10px 9px}
+td{padding:9px 10px;border-bottom:1px solid rgba(30,33,48,0.5);vertical-align:top}
+tr:last-child td{border-bottom:none}
+.num{text-align:right;font-family:var(--mono)}
+.json-wrap{position:relative;margin-bottom:24px}
+.json-block{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;font-family:var(--mono);font-size:0.73rem;line-height:1.7;white-space:pre;overflow:auto;color:#b0b8cc;max-height:380px}
+.json-key{color:#79b8ff}.json-str{color:#9ecbff}.json-num{color:var(--accent)}.json-bool{color:#f97583}.json-null{color:var(--muted);font-style:italic}
+.copy-btn{position:absolute;top:10px;right:10px;background:var(--bg);border:1px solid var(--border);color:var(--muted);font-size:0.7rem;font-family:var(--mono);padding:3px 10px;border-radius:6px;cursor:pointer;transition:all 0.15s}
+.copy-btn:hover{color:var(--accent);border-color:var(--accent)}
+.error-box{background:rgba(248,113,113,0.07);border:1px solid rgba(248,113,113,0.25);border-radius:var(--radius);padding:14px 18px;font-size:0.82rem;color:var(--error);margin:20px 28px;display:none}
+.error-box.visible{display:block}
+.checks{margin-bottom:24px;display:flex;flex-direction:column;gap:6px}
+.check{font-size:0.78rem;padding:9px 12px;border-radius:8px;border:1px solid var(--border)}
+.check.ok{color:var(--accent);background:rgba(74,242,161,0.06)}
+.check.warn{color:var(--warn);background:rgba(245,158,11,0.07);border-color:rgba(245,158,11,0.25)}
+::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:99px}
+@media(max-width:860px){main{grid-template-columns:1fr;height:auto}.left-panel{border-right:none;border-bottom:1px solid var(--border)}}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">Invoice<span>AI</span></div>
+  <span class="badge" id="providerBadge">VISION AI</span>
+</header>
+<main>
+  <!-- LEFT PANEL -->
+  <div class="left-panel">
+    <div class="upload-zone" id="dropZone">
+      <div class="upload-icon">📄</div>
+      <div class="upload-title">Drop your invoice here</div>
+      <div class="upload-sub">Supports <strong>PDF, PNG, JPG, TIFF</strong><br/>Max 10 MB per file</div>
+      <button class="btn-primary" id="browseBtn" type="button">⬆ Browse file</button>
+    </div>
+    <input type="file" id="fileInput" accept=".pdf,.png,.jpg,.jpeg,.tiff,.bmp,.webp" style="display:none"/>
+
+    <div class="file-preview" id="filePreview">
+      <div class="file-icon" id="fileIcon">📄</div>
+      <div class="file-info">
+        <div class="file-name" id="fileName">—</div>
+        <div class="file-size" id="fileSize">—</div>
+      </div>
+      <button class="file-remove" id="removeBtn" type="button">✕</button>
+    </div>
+
+    <div class="process-wrap">
+      <button class="btn-process" id="btnProcess" type="button">
+        <div class="spinner"></div>
+        <span id="btnLabel">Extract Invoice Data →</span>
+      </button>
+    </div>
+
+    <div class="section-sep">— or batch mode —</div>
+    <div style="padding:0 24px">
+      <button class="btn-ghost" id="batchBtn" type="button" style="width:100%">📂 Upload multiple files</button>
+    </div>
+    <input type="file" id="batchInput" accept=".pdf,.png,.jpg,.jpeg,.tiff,.bmp,.webp" multiple style="display:none"/>
+    <div class="batch-list" id="batchList"></div>
+    <div style="padding:10px 24px;display:none" id="batchProcessWrap">
+      <button class="btn-ghost" id="batchProcessBtn" type="button" style="width:100%">⚡ Process all</button>
+    </div>
+
+    <div style="flex:1"></div>
+    <div style="padding:18px 24px;font-size:0.68rem;color:var(--muted);line-height:1.6">
+      <span id="providerNote">Each document is read by a vision LLM.</span><br/>Uploaded files are not stored. Results stay on this machine.
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div class="right-panel">
+    <div class="panel-header">
+      <div class="panel-title" id="panelTitle">Extracted Data</div>
+      <div class="panel-actions" id="panelActions" style="display:none">
+        <button class="btn-ghost" id="downloadBtn" type="button">⬇ JSON</button>
+        <button class="btn-ghost" id="downloadCsvBtn" type="button">⬇ CSV</button>
+        <button class="btn-ghost" id="clearBtn" type="button">✕ Clear</button>
+      </div>
+    </div>
+
+    <div class="empty-state" id="emptyState">
+      <div class="empty-graphic">🧾</div>
+      <div class="empty-text">
+        <h3>No invoice processed yet</h3>
+        <p>Upload a PDF or image to extract invoice data</p>
+      </div>
+    </div>
+
+    <div class="error-box" id="errorBox"></div>
+
+    <!-- RESULTS: PDF tabs → invoice tabs → content -->
+    <div class="results-area" id="resultsArea">
+
+      <!-- Level 1: PDF tabs (only shown in batch mode) -->
+      <div class="pdf-tabs-bar" id="pdfTabsBar" style="display:none"></div>
+
+      <!-- Level 2: Invoice tabs -->
+      <div class="invoice-tabs-bar" id="invTabsBar" style="display:none"></div>
+
+      <!-- Invoice content -->
+      <div class="invoice-content" id="invoiceContent">
+        <div class="summary-grid" id="summaryGrid"></div>
+        <div class="checks" id="checksBox"></div>
+        <div id="lineItemsSection">
+          <div class="sec-title">Line Items</div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr>
+                <th>Description</th>
+                <th class="num">Qty</th>
+                <th class="num">Unit Price</th>
+                <th class="num">Total</th>
+              </tr></thead>
+              <tbody id="lineItemsBody"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="sec-title">Raw JSON</div>
+        <div class="json-wrap">
+          <button class="copy-btn" id="copyBtn" type="button">Copy</button>
+          <div class="json-block" id="jsonBlock"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+// ── State ──────────────────────────────────────────────────
+let selectedFile   = null;
+let batchFiles     = [];
+let lastResultId   = null;
+
+// pdfResults: array of { filename, invoices[] }
+let pdfResults    = [];
+let currentPdf    = 0;
+let currentInv    = 0;
+
+// ── Boot ───────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('browseBtn').addEventListener('click', () =>
+    document.getElementById('fileInput').click());
+
+  document.getElementById('fileInput').addEventListener('change', e => {
+    if (e.target.files?.[0]) setFile(e.target.files[0]);
+  });
+
+  document.getElementById('removeBtn').addEventListener('click', clearFile);
+  document.getElementById('btnProcess').addEventListener('click', processFile);
+
+  document.getElementById('batchBtn').addEventListener('click', () =>
+    document.getElementById('batchInput').click());
+
+  document.getElementById('batchInput').addEventListener('change', e => {
+    batchFiles = Array.from(e.target.files);
+    renderBatchList();
+  });
+
+  document.getElementById('batchProcessBtn').addEventListener('click', processBatch);
+  document.getElementById('downloadBtn').addEventListener('click', downloadJSON);
+  document.getElementById('downloadCsvBtn').addEventListener('click', downloadCSV);
+  loadProvider();
+  document.getElementById('clearBtn').addEventListener('click', clearAll);
+  document.getElementById('copyBtn').addEventListener('click', copyJSON);
+
+  const dz = document.getElementById('dropZone');
+  dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('drag-over'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+  dz.addEventListener('drop', e => {
+    e.preventDefault(); dz.classList.remove('drag-over');
+    if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]);
+  });
+});
+
+// ── File helpers ───────────────────────────────────────────
+function setFile(f) {
+  selectedFile = f;
+  document.getElementById('fileName').textContent = f.name;
+  document.getElementById('fileSize').textContent = fmtBytes(f.size);
+  document.getElementById('fileIcon').textContent = f.name.toLowerCase().endsWith('.pdf') ? '📑' : '🖼️';
+  document.getElementById('filePreview').classList.add('visible');
+  document.getElementById('btnProcess').classList.add('ready');
+}
+
+function clearFile() {
+  selectedFile = null;
+  document.getElementById('fileInput').value = '';
+  document.getElementById('filePreview').classList.remove('visible');
+  document.getElementById('btnProcess').classList.remove('ready');
+}
+
+function fmtBytes(b) {
+  if (b < 1024) return b + ' B';
+  if (b < 1048576) return (b/1024).toFixed(1) + ' KB';
+  return (b/1048576).toFixed(1) + ' MB';
+}
+
+// ── Single file ────────────────────────────────────────────
+async function processFile() {
+  if (!selectedFile) return;
+  setLoading(true);
+  hideError();
+
+  const fd = new FormData();
+  fd.append('file', selectedFile);
+
+  try {
+    const res  = await fetch('/api/process', { method:'POST', body:fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Server error');
+    lastResultId = data.result_id;
+
+    const invoices = extractInvoices(data);
+    pdfResults = [{ filename: selectedFile.name, invoices }];
+    renderResults(false);
+  } catch(err) {
+    showError(err.message);
+  } finally {
+    setLoading(false);
+  }
+}
+
+// ── Batch files ────────────────────────────────────────────
+function renderBatchList() {
+  const list = document.getElementById('batchList');
+  list.innerHTML = '';
+  batchFiles.forEach((f, i) => {
+    list.innerHTML += `
+      <div class="batch-item" id="batch-${i}">
+        <span>${f.name.toLowerCase().endsWith('.pdf') ? '📑':'🖼️'}</span>
+        <span class="b-name">${esc(f.name)}</span>
+        <span class="bst pending" id="bst-${i}">pending</span>
+      </div>`;
+  });
+  document.getElementById('batchProcessWrap').style.display = batchFiles.length ? 'block' : 'none';
+}
+
+async function processBatch() {
+  pdfResults = [];
+  hideError();
+
+  for (let i = 0; i < batchFiles.length; i++) {
+    const st = document.getElementById('bst-' + i);
+    st.textContent = 'processing';
+    st.className = 'bst processing';
+
+    const fd = new FormData();
+    fd.append('file', batchFiles[i]);
+
+    try {
+      const res  = await fetch('/api/process', { method:'POST', body:fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail);
+
+      const invoices = extractInvoices(data);
+      pdfResults.push({ filename: batchFiles[i].name, invoices });
+      lastResultId = data.result_id;
+
+      st.textContent = `done (${invoices.length})`;
+      st.className = 'bst done';
+    } catch(err) {
+      pdfResults.push({ filename: batchFiles[i].name, invoices: [] });
+      st.textContent = 'error';
+      st.className = 'bst error';
+    }
+  }
+
+  if (pdfResults.length > 0) renderResults(true);
+}
+
+// ── Extract invoices from API response ────────────────────
+function extractInvoices(data) {
+  const inv = data.invoices || (data.data && data.data.invoices) || [];
+  return inv.filter(i => !i.error && Object.keys(i).length > 0);
+}
+
+// ── Render all results ─────────────────────────────────────
+function renderResults(isBatch) {
+  currentPdf = 0;
+  currentInv = 0;
+
+  document.getElementById('emptyState').style.display   = 'none';
+  document.getElementById('resultsArea').classList.add('visible');
+  document.getElementById('panelActions').style.display = 'flex';
+
+  const pdfBar = document.getElementById('pdfTabsBar');
+
+  if (isBatch && pdfResults.length > 1) {
+    // Show PDF-level tabs
+    pdfBar.style.display = 'flex';
+    pdfBar.innerHTML = '';
+    pdfResults.forEach((pdf, i) => {
+      const btn = document.createElement('button');
+      btn.className = 'pdf-tab' + (i === 0 ? ' active' : '');
+      btn.innerHTML = `📑 ${esc(pdf.filename)} <span class="pdf-count">${pdf.invoices.length}</span>`;
+      btn.addEventListener('click', () => switchPdf(i));
+      pdfBar.appendChild(btn);
+    });
+  } else {
+    pdfBar.style.display = 'none';
+  }
+
+  renderPdfInvoices(0);
+}
+
+function switchPdf(i) {
+  currentPdf = i;
+  currentInv = 0;
+  document.querySelectorAll('.pdf-tab').forEach((b, j) =>
+    b.classList.toggle('active', i === j));
+  renderPdfInvoices(i);
+}
+
+function renderPdfInvoices(pdfIdx) {
+  const pdf      = pdfResults[pdfIdx];
+  const invoices = pdf ? pdf.invoices : [];
+  const invBar   = document.getElementById('invTabsBar');
+
+  // Update panel title
+  document.getElementById('panelTitle').textContent =
+    pdfResults.length > 1
+      ? `${pdf.filename} — ${invoices.length} invoice${invoices.length !== 1 ? 's' : ''}`
+      : `${invoices.length} invoice${invoices.length !== 1 ? 's' : ''} found`;
+
+  if (invoices.length > 1) {
+    invBar.style.display = 'flex';
+    invBar.innerHTML = '';
+    invoices.forEach((inv, i) => {
+      const label = inv.invoice_number ? '#' + inv.invoice_number
+                  : (inv.page ? `Page ${inv.page}` : `Invoice ${i+1}`);
+      const btn = document.createElement('button');
+      btn.className = 'inv-tab' + (i === 0 ? ' active' : '');
+      btn.textContent = label;
+      btn.addEventListener('click', () => switchInv(i));
+      invBar.appendChild(btn);
+    });
+  } else {
+    invBar.style.display = 'none';
+  }
+
+  currentInv = 0;
+  if (invoices.length > 0) {
+    renderOneInvoice(invoices[0]);
+  } else {
+    document.getElementById('summaryGrid').innerHTML =
+      '<p style="color:var(--muted);font-size:0.82rem">No invoices found in this file.</p>';
+    document.getElementById('lineItemsSection').style.display = 'none';
+    document.getElementById('jsonBlock').textContent = '[]';
+    document.getElementById('checksBox').innerHTML = '';
+  }
+}
+
+function switchInv(i) {
+  currentInv = i;
+  document.querySelectorAll('.inv-tab').forEach((b, j) =>
+    b.classList.toggle('active', i === j));
+  renderOneInvoice(pdfResults[currentPdf].invoices[i]);
+}
+
+// ── Render one invoice ─────────────────────────────────────
+function renderOneInvoice(data) {
+  const CARDS = [
+    {label:'Invoice #',  key:'invoice_number'},
+    {label:'Date',       key:'invoice_date'},
+    {label:'Due Date',   key:'due_date'},
+    {label:'Supplier',   key:'supplier_name'},
+    {label:'Client',     key:'client_name'},
+    {label:'Currency',   key:'currency'},
+    {label:'Subtotal',   key:'subtotal',     amount:true},
+    {label:'VAT Rate',   key:'vat_rate',     suffix:'%'},
+    {label:'VAT Amount', key:'vat_amount',   amount:true},
+    {label:'Total',      key:'total_amount', amount:true},
+    {label:'Payment',    key:'payment_method'},
+  ];
+
+  const grid = document.getElementById('summaryGrid');
+  grid.innerHTML = '';
+  CARDS.forEach((c, i) => {
+    const val = data[c.key];
+    let display;
+    if (val === null || val === undefined) {
+      display = '<span class="null-value">not found</span>';
+    } else {
+      const fmt = c.amount ? fmtAmt(val, data.currency) : (val + (c.suffix||''));
+      display = `<span class="${c.amount ? 'card-value amount' : 'card-value'}">${esc(fmt)}</span>`;
+    }
+    grid.innerHTML += `
+      <div class="summary-card" style="animation-delay:${i*0.03}s">
+        <div class="card-label">${c.label}</div>${display}
+      </div>`;
+  });
+
+  const items = data.line_items || [];
+  const tbody = document.getElementById('lineItemsBody');
+  tbody.innerHTML = '';
+  document.getElementById('lineItemsSection').style.display = items.length ? 'block' : 'none';
+  items.forEach(item => {
+    tbody.innerHTML += `
+      <tr>
+        <td>${esc(item.description || '—')}</td>
+        <td class="num">${esc(item.quantity ?? '—')}</td>
+        <td class="num">${item.unit_price != null ? esc(fmtAmt(item.unit_price, data.currency)) : '—'}</td>
+        <td class="num">${item.total      != null ? esc(fmtAmt(item.total, data.currency)) : '—'}</td>
+      </tr>`;
+  });
+
+  const checks = document.getElementById('checksBox');
+  checks.innerHTML = '';
+  const warnings = data.warnings || [];
+  const lines = warnings.length ? warnings : ['Totals are consistent (line items, subtotal, VAT, total).'];
+  lines.forEach(w => {
+    const div = document.createElement('div');
+    div.className = 'check ' + (warnings.length ? 'warn' : 'ok');
+    div.textContent = (warnings.length ? '⚠ ' : '✓ ') + w;
+    checks.appendChild(div);
+  });
+
+  document.getElementById('jsonBlock').innerHTML = highlight(JSON.stringify(data, null, 2));
+  document.getElementById('invoiceContent').scrollTop = 0;
+}
+
+// ── Helpers ────────────────────────────────────────────────
+// Everything that comes from a file or the model is untrusted: escape it before it goes into HTML.
+function esc(v) {
+  return String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+async function loadProvider() {
+  try {
+    const res = await fetch('/health');
+    const h = await res.json();
+    document.getElementById('providerBadge').textContent = `VISION AI · ${h.provider.toUpperCase()}`;
+    document.getElementById('providerNote').textContent = `Model: ${h.model}. Each document is read by a vision LLM.`;
+  } catch (_) { /* badge keeps its default text */ }
+}
+function fmtAmt(val, cur) {
+  const n = parseFloat(val);
+  return isNaN(n) ? val : n.toFixed(3).replace(/\B(?=(\d{3})+(?!\d))/g, ',') + (cur ? ' ' + cur : '');
+}
+
+function highlight(json) {
+  json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, m => {
+    let c = 'json-num';
+    if (/^"/.test(m)) c = /:$/.test(m) ? 'json-key' : 'json-str';
+    else if (/true|false/.test(m)) c = 'json-bool';
+    else if (/null/.test(m)) c = 'json-null';
+    return `<span class="${c}">${m}</span>`;
+  });
+}
+
+function setLoading(on) {
+  const btn = document.getElementById('btnProcess');
+  const lbl = document.getElementById('btnLabel');
+  if (on) { btn.classList.add('loading');    lbl.textContent = 'Processing...'; }
+  else    { btn.classList.remove('loading'); lbl.textContent = 'Extract Invoice Data →'; }
+}
+
+function clearAll() {
+  pdfResults = []; currentPdf = 0; currentInv = 0; lastResultId = null;
+  document.getElementById('resultsArea').classList.remove('visible');
+  document.getElementById('emptyState').style.display = 'flex';
+  document.getElementById('panelActions').style.display = 'none';
+  document.getElementById('pdfTabsBar').style.display = 'none';
+  document.getElementById('panelTitle').textContent = 'Extracted Data';
+}
+
+function showError(msg) {
+  const b = document.getElementById('errorBox');
+  b.textContent = '⚠ ' + msg; b.classList.add('visible');
+}
+function hideError() {
+  document.getElementById('errorBox').classList.remove('visible');
+}
+
+function copyJSON() {
+  const inv = pdfResults[currentPdf]?.invoices[currentInv];
+  if (!inv) return;
+  navigator.clipboard.writeText(JSON.stringify(inv, null, 2)).then(() => {
+    const b = document.getElementById('copyBtn');
+    b.textContent = 'Copied!';
+    setTimeout(() => b.textContent = 'Copy', 1500);
+  });
+}
+
+function downloadJSON() {
+  if (!lastResultId) return;
+  window.open('/api/download/' + lastResultId + '?format=json', '_blank');
+}
+
+function downloadCSV() {
+  if (!lastResultId) return;
+  window.open('/api/download/' + lastResultId + '?format=csv', '_blank');
+}
+</script>
+</body>
+</html>
