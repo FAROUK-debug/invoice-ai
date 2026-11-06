@@ -1,5 +1,7 @@
 """Tests that run without any API key: the model call is replaced by a fake."""
 
+import csv
+import io
 import json
 import sys
 from pathlib import Path
@@ -28,7 +30,6 @@ def client(tmp_path, monkeypatch):
 def fake_model(monkeypatch):
     """Makes the Gemini call return the expected answer of sample 01."""
     answer = (SAMPLES / "expected" / "01_tn_facture_simple.json").read_text(encoding="utf-8")
-    monkeypatch.setattr(extractor, "provider", lambda: "gemini")
     monkeypatch.setattr(extractor, "_call_gemini", lambda data, mime: answer)
 
 
@@ -57,6 +58,21 @@ def test_wrong_line_total_is_flagged():
     assert any("Line 1" in w for w in check_invoice(inv))
 
 
+def test_gap_of_one_is_stamp_duty_only_in_tnd():
+    assert check_invoice(Invoice(subtotal=100, vat_amount=20, total_amount=121, currency="TND")) == []
+    assert check_invoice(Invoice(subtotal=100, vat_amount=20, total_amount=121, currency="EUR"))
+
+
+def test_small_error_on_a_large_invoice_is_flagged():
+    inv = Invoice(line_items=[{"quantity": 1, "unit_price": 50000, "total": 50040}], total_amount=50040)
+    assert any("Line 1" in w for w in check_invoice(inv))
+
+
+def test_rounding_is_not_flagged():
+    inv = Invoice(line_items=[{"quantity": 3, "unit_price": 1.333, "total": 4}], subtotal=4, total_amount=4)
+    assert check_invoice(inv) == []
+
+
 # ── parsing the model's answer ───────────────────────────────────────
 
 def test_parse_accepts_code_fence_and_bare_list():
@@ -75,7 +91,7 @@ def test_invalid_output_twice_raises():
 
 def test_health(client):
     body = client.get("/health").json()
-    assert body["status"] == "ok" and body["provider"] in ("gemini", "groq")
+    assert body["status"] == "ok" and body["model"]
 
 
 def test_process_and_download(client, fake_model):
@@ -108,6 +124,42 @@ def test_rejects_too_large_files(client, monkeypatch):
     monkeypatch.setattr(main, "MAX_FILE_SIZE_MB", 1)
     r = client.post("/api/process", files={"file": ("big.pdf", b"%PDF-" + b"0" * (1024 * 1024), "application/pdf")})
     assert r.status_code == 413
+
+
+def test_oversized_upload_is_refused_before_it_is_read(client, monkeypatch):
+    async def must_not_run(file):
+        raise AssertionError("the body was read")
+    monkeypatch.setattr(main, "MAX_FILE_SIZE_MB", 1)
+    monkeypatch.setattr(main, "read_limited", must_not_run)
+    r = client.post("/api/process", files={"file": ("big.pdf", b"%PDF-" + b"0" * (2 * 1024 * 1024), "application/pdf")})
+    assert r.status_code == 413
+
+
+def test_upload_without_a_length_is_refused(client):
+    assert client.post("/api/process", content=iter([b"data"])).status_code == 411
+
+
+def test_batch_may_be_larger_than_one_file(client, fake_model, monkeypatch):
+    monkeypatch.setattr(main, "MAX_FILE_SIZE_MB", 1)
+    pdf = (SAMPLES / "01_tn_facture_simple.pdf").read_bytes() + b" " * (700 * 1024)
+    files = [("files", (f"{i}.pdf", pdf, "application/pdf")) for i in range(2)]
+    assert client.post("/api/batch", files=files).status_code == 200
+
+
+def test_damaged_pdf_is_a_clean_error(client):
+    r = client.post("/api/process", files={"file": ("a.pdf", b"%PDF-1.7 broken", "application/pdf")})
+    assert r.status_code == 422 and "damaged" in r.json()["detail"]
+
+
+@pytest.mark.parametrize("text", ['=HYPERLINK("http://x","y")', "+1", "-1", "@SUM(A1)"])
+def test_csv_cells_cannot_become_formulas(text):
+    text_csv = main.to_csv({"invoices": [{"supplier_name": text, "warnings": []}]})
+    assert next(csv.DictReader(io.StringIO(text_csv)))["supplier_name"] == "'" + text
+
+
+def test_csv_keeps_numbers_and_normal_text():
+    row = main.to_csv({"invoices": [{"supplier_name": "ACME", "total_amount": -5.0, "warnings": []}]}).splitlines()[1]
+    assert "ACME" in row and "-5.0" in row and "'" not in row
 
 
 def test_security_headers(client):
