@@ -3,9 +3,11 @@ main.py — FastAPI backend for InvoiceAI.
 Run: uvicorn main:app --reload        (listens on 127.0.0.1:8000 only)
 
 Security choices:
-  - uploaded files are processed in memory and never written to disk;
+  - uploaded files are never saved: above 1 MB the framework holds them in a temporary
+    file, removed when the request ends;
   - results are saved under a random id and can only be downloaded by that id;
-  - file type is checked from the content, size is capped while reading;
+  - file type is checked from the content, and uploads over the limit are refused from
+    their Content-Length before the body is read;
   - error messages sent to the browser never include internal details.
 """
 
@@ -22,7 +24,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import FileResponse, HTMLResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 
 load_dotenv()
 
@@ -37,9 +39,23 @@ RESULTS_DIR.mkdir(exist_ok=True)
 
 MAX_FILE_SIZE_MB = int(os.getenv("MAX_FILE_SIZE_MB", "10"))
 MAX_BATCH_FILES = 10
+MULTIPART_OVERHEAD = 64 * 1024  # form boundaries and headers around the files
 RESULT_ID = re.compile(r"^[a-f0-9]{32}$")
 
 app = FastAPI(title="InvoiceAI", description="Invoice data extraction with a vision LLM", version="2.0.0")
+
+
+@app.middleware("http")
+async def limit_upload_size(request, call_next):
+    # Runs before the framework reads the body, which it would otherwise accept in full.
+    if request.method == "POST":
+        length = request.headers.get("content-length", "")
+        if not length.isdigit():
+            return JSONResponse({"detail": "Content-Length required."}, status_code=411)
+        files = MAX_BATCH_FILES if request.url.path == "/api/batch" else 1
+        if int(length) > files * MAX_FILE_SIZE_MB * 1024 * 1024 + MULTIPART_OVERHEAD:
+            return JSONResponse({"detail": f"File too large. Max {MAX_FILE_SIZE_MB} MB."}, status_code=413)
+    return await call_next(request)
 
 
 @app.middleware("http")
@@ -60,7 +76,6 @@ async def root():
 async def health():
     return {
         "status": "ok",
-        "provider": extractor.provider(),
         "model": extractor.model_name(),
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
@@ -122,12 +137,18 @@ CSV_FIELDS = ["invoice_number", "invoice_date", "due_date", "supplier_name", "su
               "currency", "payment_method", "page", "warnings"]
 
 
+def csv_safe(value):
+    """Spreadsheets run a cell starting with these as a formula, and the text comes from the file."""
+    return "'" + value if isinstance(value, str) and value.startswith(("=", "+", "-", "@", "\t", "\r")) else value
+
+
 def to_csv(result: dict) -> str:
     buf = io.StringIO()
-    writer = csv.DictWriter(buf, fieldnames=CSV_FIELDS, extrasaction="ignore")
+    writer = csv.DictWriter(buf, fieldnames=CSV_FIELDS)
     writer.writeheader()
     for inv in result.get("invoices", []):
-        writer.writerow({**inv, "warnings": " | ".join(inv.get("warnings", []))})
+        row = {**inv, "warnings": " | ".join(inv.get("warnings", []))}
+        writer.writerow({field: csv_safe(row.get(field)) for field in CSV_FIELDS})
     return buf.getvalue()
 
 
