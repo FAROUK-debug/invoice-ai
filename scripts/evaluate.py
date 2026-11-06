@@ -100,7 +100,7 @@ def main():
     lines = [
         "# Evaluation report",
         "",
-        f"Provider: **{extractor.provider()}**, model: **{extractor.model_name()}**  ",
+        f"Model: **{extractor.model_name()}**  ",
         f"Files: {len(files)}, field checks: {len(all_checks)}, average time per file: "
         f"{sum(durations) / len(durations):.1f}s",
         "",

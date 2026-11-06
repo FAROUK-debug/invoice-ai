@@ -1,17 +1,12 @@
 """
 extractor.py — Turns an invoice file (PDF or image) into validated invoice data.
 
-Two providers, picked with LLM_PROVIDER in .env:
-  - gemini (default, free tier): the whole PDF is sent in one call, with the invoice
-    schema as structured output.
-  - groq: each PDF page is rendered to a JPEG and sent to Llama 4 Scout vision.
-
-Whatever the provider, the answer is validated against schema.ExtractionResult,
-and every invoice goes through the totals checks in checks.py.
+The whole file goes to Gemini in one call, with the invoice schema as structured output.
+The answer is validated against schema.ExtractionResult, and every invoice goes through
+the totals checks in checks.py.
 Never log the file or the model's answer: invoices contain business data.
 """
 
-import base64
 import io
 import json
 import logging
@@ -20,7 +15,6 @@ import re
 import time
 
 import pypdfium2 as pdfium
-import requests
 from PIL import Image
 from pydantic import ValidationError
 
@@ -47,13 +41,7 @@ class ExtractionError(Exception):
     """Raised when the document can't be read or the model doesn't give valid data."""
 
 
-def provider() -> str:
-    return os.getenv("LLM_PROVIDER", "gemini").lower()
-
-
 def model_name() -> str:
-    if provider() == "groq":
-        return os.getenv("GROQ_MODEL", "meta-llama/llama-4-scout-17b-16e-instruct")
     return os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
 
 
@@ -75,21 +63,15 @@ def detect_mime(file_bytes: bytes) -> str:
     return mime
 
 
-def _to_jpeg_b64(img: Image.Image) -> str:
-    buf = io.BytesIO()
-    img.convert("RGB").save(buf, format="JPEG", quality=85)
-    return base64.b64encode(buf.getvalue()).decode("ascii")
-
-
-def pdf_pages_b64(file_bytes: bytes) -> list[str]:
-    doc = pdfium.PdfDocument(file_bytes)
-    if len(doc) > MAX_PAGES:
-        raise ExtractionError(f"PDF has {len(doc)} pages; the limit is {MAX_PAGES}.")
-    return [_to_jpeg_b64(doc[i].render(scale=2).to_pil()) for i in range(len(doc))]
+def pdf_page_count(file_bytes: bytes) -> int:
+    try:
+        return len(pdfium.PdfDocument(file_bytes))
+    except pdfium.PdfiumError:
+        raise ExtractionError("The PDF is damaged or password-protected.") from None
 
 
 # ─────────────────────────────────────────────────────────────────────
-# 2. Providers — each returns the raw JSON text from the model
+# 2. The model call: returns the raw JSON text
 # ─────────────────────────────────────────────────────────────────────
 
 def _call_gemini(file_bytes: bytes, mime: str) -> str:
@@ -100,7 +82,9 @@ def _call_gemini(file_bytes: bytes, mime: str) -> str:
     if not key:
         raise ExtractionError("GEMINI_API_KEY is not set in .env.")
     if mime in ("image/tiff", "image/bmp"):  # not accepted by Gemini: convert first
-        file_bytes, mime = base64.b64decode(_to_jpeg_b64(Image.open(io.BytesIO(file_bytes)))), "image/jpeg"
+        buf = io.BytesIO()
+        Image.open(io.BytesIO(file_bytes)).convert("RGB").save(buf, format="JPEG", quality=85)
+        file_bytes, mime = buf.getvalue(), "image/jpeg"
 
     client = genai.Client(api_key=key)
     try:
@@ -119,40 +103,6 @@ def _call_gemini(file_bytes: bytes, mime: str) -> str:
             raise ExtractionError("Gemini rate limit reached. Wait a minute and try again.") from None
         raise ExtractionError(f"Gemini failed (HTTP {e.code}).") from None
     return response.text or ""
-
-
-def _call_groq_page(b64_jpeg: str) -> str:
-    key = os.getenv("GROQ_API_KEY")
-    if not key:
-        raise ExtractionError("GROQ_API_KEY is not set in .env.")
-    payload = {
-        "model": model_name(),
-        "messages": [{
-            "role": "user",
-            "content": [
-                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64_jpeg}"}},
-                {"type": "text", "text": PROMPT + " Answer with JSON only, in this shape: "
-                                                  + json.dumps(RESPONSE_SCHEMA)},
-            ],
-        }],
-        "temperature": 0,
-        "max_tokens": 4096,
-        "response_format": {"type": "json_object"},
-    }
-    for attempt in range(3):
-        resp = requests.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers={"Authorization": f"Bearer {key}"},
-            json=payload,
-            timeout=120,
-        )
-        if resp.status_code == 429 and attempt < 2:
-            time.sleep(10 * (attempt + 1))
-            continue
-        if resp.status_code != 200:
-            raise ExtractionError(f"Groq failed (HTTP {resp.status_code}).")
-        return resp.json()["choices"][0]["message"]["content"]
-    raise ExtractionError("Groq rate limit reached. Wait a minute and try again.")
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -182,19 +132,10 @@ def process_invoice(file_bytes: bytes) -> dict:
     mime = detect_mime(file_bytes)
     started = time.perf_counter()
 
-    if provider() == "groq":
-        pages = pdf_pages_b64(file_bytes) if mime == PDF_MIME else [_to_jpeg_b64(Image.open(io.BytesIO(file_bytes)))]
-        invoices = []
-        for page_num, b64 in enumerate(pages, start=1):
-            for inv in _with_retry(lambda: _call_groq_page(b64)).invoices:
-                inv.page = page_num
-                invoices.append(inv)
-        page_count = len(pages)
-    else:
-        page_count = len(pdfium.PdfDocument(file_bytes)) if mime == PDF_MIME else 1
-        if page_count > MAX_PAGES:
-            raise ExtractionError(f"PDF has {page_count} pages; the limit is {MAX_PAGES}.")
-        invoices = _with_retry(lambda: _call_gemini(file_bytes, mime)).invoices
+    page_count = pdf_page_count(file_bytes) if mime == PDF_MIME else 1
+    if page_count > MAX_PAGES:
+        raise ExtractionError(f"PDF has {page_count} pages; the limit is {MAX_PAGES}.")
+    invoices = _with_retry(lambda: _call_gemini(file_bytes, mime)).invoices
 
     duration_ms = int((time.perf_counter() - started) * 1000)
     log.info("extracted %d invoice(s) from %d page(s) with %s in %d ms",
@@ -204,7 +145,6 @@ def process_invoice(file_bytes: bytes) -> dict:
         "invoices": [{**inv.model_dump(), "warnings": check_invoice(inv)} for inv in invoices],
         "page_count": page_count,
         "invoice_count": len(invoices),
-        "provider": provider(),
         "model": model_name(),
         "duration_ms": duration_ms,
     }
