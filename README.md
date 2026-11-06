@@ -14,13 +14,11 @@ Built for French and English invoices, including Tunisian ones (TND with 3 decim
 
 ```
 PDF / image ──► type check (by content) ──► vision LLM ──► Pydantic validation ──► totals checks ──► JSON / CSV
-                                             (Gemini or Groq)  (1 retry if invalid)    (line items, VAT, total)
+                                                (Gemini)     (1 retry if invalid)    (line items, VAT, total)
 ```
 
-1. **Upload**: the file type is detected from its bytes, not its name; size is capped while reading.
-2. **Extraction**:
-   - **Gemini** (default, free tier) reads the whole PDF in one call, with the invoice schema as structured output.
-   - **Groq** (Llama 4 Scout vision) reads one page image at a time.
+1. **Upload**: the file type is detected from its bytes, not its name. Oversized uploads are refused from their `Content-Length` before the body is read.
+2. **Extraction**: Gemini (free tier) reads the whole file in one call, with the invoice schema as structured output.
 3. **Validation**: the answer must match the schema in [`schema.py`](schema.py). Invalid output is retried once, then reported as an error, never silently dropped.
 4. **Accounting checks** ([`checks.py`](checks.py)):
    - quantity × unit price = line total;
@@ -82,7 +80,7 @@ docker run --env-file .env -p 127.0.0.1:8000:8000 invoice-ai
 | POST | `/api/process` | One file → invoices, warnings, `result_id` |
 | POST | `/api/batch` | Up to 10 files |
 | GET | `/api/download/{result_id}?format=json\|csv` | Download a saved result |
-| GET | `/health` | Status, provider and model |
+| GET | `/health` | Status and model |
 
 ```bash
 curl -F "file=@samples/01_tn_facture_simple.pdf" http://127.0.0.1:8000/api/process
@@ -90,8 +88,10 @@ curl -F "file=@samples/01_tn_facture_simple.pdf" http://127.0.0.1:8000/api/proce
 
 ## Security
 
-- **Uploaded files** are processed in memory and **never written to disk**.
-- **Results** are saved under a random 32-hex id, and only that exact id can be downloaded, so there's no path traversal.
+- **Uploaded files** are sent to Google Gemini to be read, so don't use real invoices with a free-tier key. The app never saves them: above 1 MB the framework holds them in a temporary file, removed when the request ends.
+- **Upload size** is checked from `Content-Length` before the body is read, and requests without that header are refused.
+- **Results** are saved in `results/` until you delete them, under a random 32-hex id. Only that exact id can be downloaded, so there's no path traversal.
+- **CSV export** puts a `'` before any value a spreadsheet would run as a formula.
 - **Model output is untrusted.** Every value is escaped before it's shown in the page, so a crafted invoice can't inject HTML or JavaScript (no XSS).
 - **Server access:**
   - The server listens on `127.0.0.1` only.
@@ -101,13 +101,13 @@ curl -F "file=@samples/01_tn_facture_simple.pdf" http://127.0.0.1:8000/api/proce
 - **Logs** record counts and timings only, never invoice content.
 - **API keys** stay in `.env`, which git ignores.
 
-These are covered by tests in [`tests/test_app.py`](tests/test_app.py).
+[`tests/test_app.py`](tests/test_app.py) covers the upload limits, the download ids, CSV cells and the security headers. Escaping in the page isn't covered by an automated test.
 
 ## Tests and samples
 
 ```bash
 pip install -r requirements-dev.txt
-pytest                          # 18 tests, no API key needed (the model call is faked)
+pytest                          # no API key needed (the model call is faked)
 python scripts/make_samples.py  # regenerate the fictional sample invoices + expected answers
 python scripts/evaluate.py      # measure accuracy (uses your API key: 1 call per file)
 ```
@@ -118,7 +118,7 @@ All companies, people and numbers in `samples/` are invented.
 
 ```
 main.py          FastAPI app: upload, validation, download, security headers
-extractor.py     Gemini / Groq providers, parsing, retry
+extractor.py     Gemini call, parsing, retry
 schema.py        Invoice schema (Pydantic + JSON Schema for Gemini)
 checks.py        Accounting consistency checks
 static/          Single-page web UI (vanilla JS)
@@ -129,4 +129,4 @@ tests/           pytest suite (runs in GitHub Actions)
 
 ## Tech
 
-Python · FastAPI · Pydantic · Google Gemini (google-genai) · Groq · pypdfium2 · Pillow · ReportLab · pytest · GitHub Actions · Docker
+Python · FastAPI · Pydantic · Google Gemini (google-genai) · pypdfium2 · Pillow · ReportLab · pytest · GitHub Actions · Docker
