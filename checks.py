@@ -7,12 +7,13 @@ where the numbers don't add up, so a human looks at them before they're used.
 
 from schema import Invoice
 
-# Amounts are often rounded to 2 or 3 decimals (TND uses 3); allow a small gap.
-TOLERANCE = 0.02
+# Amounts are rounded to 2 or 3 decimals (TND uses 3); allow a small fixed gap. Fixed, because a
+# percentage would hide a misread digit on a large invoice.
+TOLERANCE = 0.05
 
 
 def _close(a: float, b: float) -> bool:
-    return abs(a - b) <= max(TOLERANCE, abs(b) * 0.001)
+    return abs(a - b) <= TOLERANCE
 
 
 def check_invoice(inv: Invoice) -> list[str]:
@@ -43,9 +44,10 @@ def check_invoice(inv: Invoice) -> list[str]:
             )
 
     if None not in (inv.subtotal, inv.vat_amount, inv.total_amount):
-        # Some invoices add a fixed stamp duty (e.g. Tunisian "timbre fiscal", 1 TND) after VAT.
+        # Tunisian invoices add a fixed stamp duty ("timbre fiscal", up to 1 TND) after VAT.
         gap = inv.total_amount - (inv.subtotal + inv.vat_amount)
-        if not _close(gap, 0) and not (0 < gap <= 1.0 + TOLERANCE):
+        stamp_duty = inv.currency == "TND" and 0 < gap <= 1.0 + TOLERANCE
+        if not _close(gap, 0) and not stamp_duty:
             warnings.append(
                 f"Subtotal + VAT = {inv.subtotal + inv.vat_amount:.3f}, but the total is {inv.total_amount}."
             )
